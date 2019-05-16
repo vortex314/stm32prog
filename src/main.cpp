@@ -11,7 +11,7 @@
 #include <Sender.h>
 #include <System.h>
 #include <Publisher.h>
-#include <Programmer.h>
+#include "Programmer.h"
 
 #include <Akka.cpp>
 #include <Native.cpp>
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
 	Sys::init();
 	INFO("version : " __DATE__ " " __TIME__ "\n");
 
-	config.loadFile("stm32prog.json");
+//TODO	config.loadFile("stm32prog.json");
 	logger.setLogLevel('I');
 	overrideConfig(config,argc,argv);
 	std::string url= config.root()["mqtt"]["url"] | "tcp://iot.eclipse.org:1883";
@@ -69,7 +69,7 @@ void overrideConfig(Config& config,int argc, char **argv) {
 				config.set("host",optarg);
 				break;
 			case 'f':
-				config.load(optarg);
+//TODO				config.loadFile(optarg);
 				break;
 			default: /* '?' */
 				fprintf(stderr, "Usage: %s [-f configFile] [-m mqttHost]\n",

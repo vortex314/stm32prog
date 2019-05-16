@@ -35,7 +35,7 @@ class Programmer : public Actor {
 		Receive& createReceive();
 
 		void batchProgram(Bytes& binImage);
-		uint32_t  programmingState(Msg& msg,uint32_t window) ;
+		uint32_t  programming(Msg& msg,uint32_t window) ;
 };
 
 

@@ -17,6 +17,8 @@
   <Description/>
   <Dependencies/>
   <VirtualDirectory Name="src">
+    <File Name="src/Keyboard.cpp"/>
+    <File Name="src/Keyboard.h"/>
     <File Name="src/main.cpp"/>
     <File Name="src/Programmer.h"/>
     <File Name="src/Programmer.cpp"/>
@@ -33,15 +35,17 @@
     </GlobalSettings>
     <Configuration Name="Debug" CompilerType="GCC" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
       <Compiler Options="-g;-O0;-Wall;-std=c++11" C_Options="-g;-O0;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
-        <IncludePath Value="."/>
+        <IncludePath Value="./src"/>
         <IncludePath Value="../microAkka/src"/>
         <IncludePath Value="../Common"/>
         <IncludePath Value="../ArduinoJson"/>
         <IncludePath Value="../paho.mqtt.c/src"/>
       </Compiler>
-      <Linker Options="" Required="yes">
+      <Linker Options="-pthread;-lrt" Required="yes">
         <LibraryPath Value="../Common/Debug"/>
+        <LibraryPath Value="../paho.mqtt.c/src"/>
         <Library Value="Common"/>
+        <Library Value="libpaho-mqtt3a-static"/>
       </Linker>
       <ResourceCompiler Options="" Required="no"/>
       <General OutputFile="$(IntermediateDirectory)/$(ProjectName)" IntermediateDirectory="./Debug" Command="./$(ProjectName)" CommandArguments="" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="$(IntermediateDirectory)" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>

@@ -22,7 +22,7 @@
 #include <System.cpp>
 #include <Publisher.cpp>
 #include <ConfigActor.cpp>
-
+#include <Keyboard.h>
 
 Log logger(1024);
 ActorMsgBus eb;
@@ -42,19 +42,21 @@ int main(int argc, char **argv) {
 //TODO	config.loadFile("stm32prog.json");
 	logger.setLogLevel('I');
 	overrideConfig(config,argc,argv);
-	std::string url= config.root()["mqtt"]["url"] | "tcp://iot.eclipse.org:1883";
+	std::string url= config.root()["mqtt"]["url"] | "tcp://limero.ddns.net:1883";
 	config.save();
 
 	INFO(" starting microAkka test ");
-	static MessageDispatcher defaultDispatcher(2, 10240, tskIDLE_PRIORITY + 1);
+	static MessageDispatcher defaultDispatcher(5, 10240, tskIDLE_PRIORITY + 1);
 	static ActorSystem actorSystem(Sys::hostname(), defaultDispatcher);
 
 	ActorRef& mqtt =
 	    actorSystem.actorOf<Mqtt>("mqtt", url.c_str());
-	ActorRef& system = actorSystem.actorOf<System>("system", mqtt);
+	actorSystem.actorOf<System>("system", mqtt);
 	ActorRef& bridge = actorSystem.actorOf<Bridge>("bridge", mqtt);
 	ActorRef& publisher = actorSystem.actorOf<Publisher>("publisher", mqtt);
-	actorSystem.actorOf<Programmer>("programmer", mqtt,bridge,publisher);
+	ActorRef& keyboard = actorSystem.actorOf<Keyboard>("keyboard");
+	actorSystem.actorOf<Programmer>("programmer", keyboard,bridge,publisher);
+	sleep(10000000);
 
 }
 

@@ -14,9 +14,10 @@
 #include <Mqtt.h>
 #include <vector>
 #include <Base64.h>
+#include "Keyboard.h"
 class MsgBatch;
 class Programmer : public Actor {
-		ActorRef& _mqtt;
+		ActorRef& _keyboard;
 		ActorRef& _bridge;
 		ActorRef& _publisher;
 		RemoteActorRef _stm32;
@@ -28,6 +29,7 @@ class Programmer : public Actor {
 		enum {
 			IDLE,PROGRAMMING,TERMINAL
 		} _state;
+		uint32_t _idCounter;
 	public:
 		Programmer(ActorRef&,ActorRef&,ActorRef& );
 		virtual ~Programmer() ;
@@ -35,7 +37,8 @@ class Programmer : public Actor {
 		Receive& createReceive();
 
 		void batchProgram(Bytes& binImage);
-		uint32_t  programming(Msg& msg,uint32_t window) ;
+		uint32_t  programming(Msg& msg) ;
+		bool loadBinFile(Bytes& bytes,const char* binFile);
 };
 
 

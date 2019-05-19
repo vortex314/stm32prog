@@ -31,6 +31,12 @@ void overrideConfig(Config& config,int argc, char **argv);
 
 #define MAX_PORT	20
 
+void logFunction(char* str,uint32_t length) {
+	static	ofstream ofs("stm32prog.log", std::ios_base::out );
+	ofs << str << '\n';
+	ofs.flush();
+}
+
 
 
 int main(int argc, char **argv) {
@@ -41,6 +47,7 @@ int main(int argc, char **argv) {
 
 //TODO	config.loadFile("stm32prog.json");
 	logger.setLogLevel('I');
+	logger.setOutput(logFunction);
 	overrideConfig(config,argc,argv);
 	std::string url= config.root()["mqtt"]["url"] | "tcp://limero.ddns.net:1883";
 	config.save();
@@ -53,9 +60,9 @@ int main(int argc, char **argv) {
 	    actorSystem.actorOf<Mqtt>("mqtt", url.c_str());
 	actorSystem.actorOf<System>("system", mqtt);
 	ActorRef& bridge = actorSystem.actorOf<Bridge>("bridge", mqtt);
-	ActorRef& publisher = actorSystem.actorOf<Publisher>("publisher", mqtt);
+//	ActorRef& publisher = actorSystem.actorOf<Publisher>("publisher", mqtt);
 	ActorRef& keyboard = actorSystem.actorOf<Keyboard>("keyboard");
-	actorSystem.actorOf<Programmer>("programmer", keyboard,bridge,publisher);
+	actorSystem.actorOf<Programmer>("programmer", keyboard,bridge);
 	sleep(10000000);
 
 }

@@ -18,14 +18,14 @@ class MsgBatch {
 };
 
 
-Programmer::Programmer(ActorRef& keyboard, ActorRef& bridge, ActorRef& publisher)
+Programmer::Programmer(ActorRef& keyboard, ActorRef& bridge)
 	: _keyboard(keyboard)
 	, _bridge(bridge)
-	, _publisher(publisher)
 	, _stm32("ESP32-12857/programmer", bridge)
 	, _batch(*new MsgBatch()) {
 	_state = IDLE;
 	_idCounter=0;
+	_pingReplied=true;
 }
 
 Programmer::~Programmer() {}
@@ -65,7 +65,7 @@ bool Programmer::loadBinFile(Bytes& bytes,const char* binFile) {
 
 void Programmer::batchProgram(Bytes& binImage) {
 	std::vector<Msg> msgs;
-	_batch.add(Msg("ping").id(_idCounter++));
+	_batch.clear();
 	_batch.add(Msg("resetSystem").id(_idCounter++));
 	_batch.add(Msg("eraseAll").id(_idCounter++));
 	// TODO add writeMemory
@@ -79,6 +79,7 @@ void Programmer::batchProgram(Bytes& binImage) {
 	for(uint32_t i = 0; i < sectors; i++) {
 		string_format(addressHex, "%X", address + i * 256);
 		binImage.offset(i * 256);
+		sectorData.clear();
 		while(binImage.hasData() && sectorData.hasSpace(1))
 			sectorData.write(binImage.read());
 		while(sectorData.length() % 4 != 0) sectorData.write(0xFF);
@@ -87,41 +88,58 @@ void Programmer::batchProgram(Bytes& binImage) {
 	}
 	_batch.add(Msg("readMemory")("addressHex", "8000000").id(_idCounter++));
 	_batch.add(Msg("resetFlash").id(_idCounter++));
+	_idxBatchSend=0;
+	_idxBatchReply=0;
 }
 
 uint32_t Programmer::programming(Msg& msg) {
 	static struct pt pt;
-	static uint32_t firstBatchMsg = 0;
-	uint32_t window = 5;
+	static uint32_t window = 5;
+
 	PT_BEGIN(&pt);
-	// TODO send out window size msgs
-	// TODO wait reply in sequence, if timeout cancel batch
-	for(uint32_t i = 0; i < window; i++) {
-		_stm32.tell(_batch.at(i),self());
+
+	for( _idxBatchSend = 0; _idxBatchSend < window; _idxBatchSend++) { //send first window
+		_stm32.tell(_batch.at(_idxBatchSend),self());
 	}
+
 	while(true) {
 		_timer1 = timers().startSingleTimer("timeout", Msg("timeout"), 3000);
 		PT_YIELD_UNTIL(&pt,
 		               msg.cls() == MsgClass("timeout").id() ||
-		               (msg.cls() == replyCls(_batch.at(firstBatchMsg).cls()) &&
-		                !( msg.cls()==MsgClass("pingReply").id()) ));
-		INFO("%s",msg.toString().c_str());
+		               !( msg.cls()==MsgClass("pingReply").id() || msg.cls()==MsgClass("pingTimer").id()) );
+		timers().cancel(_timer1);
+
 		if(msg.cls() == MsgClass("timeout").id()) {
+
 			ERROR(" programming stopped , timeout encountered.");
 			PT_EXIT(&pt);
-		} else {
+		} else if (msg.cls() == replyCls(_batch.at(_idxBatchReply).cls())) {
 			int erc;
-			if(msg.get("erc", erc) == 0 && erc == E_OK) {
-				timers().cancel(_timer1);
-				firstBatchMsg++;
-				if(firstBatchMsg == _batch.size()) PT_EXIT(&pt);
-				if(firstBatchMsg + window < _batch.size()) _stm32.tell(_batch.at(firstBatchMsg + window));
+			if(msg.get("erc", erc) == 0) {
+				printf(" %d/%d %s = %d \n",_idxBatchReply,_batch.size()-1,Label::label(_batch.at(_idxBatchReply).cls()),erc);
+				_idxBatchReply++;
+
+				if (erc == E_OK) {
+					if(_idxBatchReply == _batch.size()) break;
+					if(_idxBatchSend  < _batch.size()) {
+						_stm32.tell(_batch.at(_idxBatchSend),self());
+						_idxBatchSend++;
+					}
+				} else {
+					ERROR("stm32programmer returned erc : %d ",erc);
+				}
 			} else {
-				ERROR(" programming stopped , error encountered. %s ",msg.toString().c_str());
+				ERROR(" programming stopped , cannot retrieve erc . %s ",msg.toString().c_str());
+				ERROR("%s",((Xdr)msg).toString().c_str());
 				PT_EXIT(&pt);
 			}
+		} else {
+
+			ERROR(" unexepected message %s , expected %s ",msg.toString().c_str(),Label::label(replyCls(_batch.at(_idxBatchReply).cls())));
+			PT_EXIT(&pt);
 		}
 	}
+
 	PT_END(&pt);
 }
 
@@ -134,10 +152,15 @@ Receive& Programmer::createReceive() {
 		if(msg.get("data", keys) == 0) {
 			for(char ch : keys) {
 				if(ch == 'p') {
-					Bytes binary(256000);
-					if ( loadBinFile(binary,"/home/lieven/workspace/stm32prog/Blink.bin") ) {
-						batchProgram(binary);
-						_state = PROGRAMMING;
+					if ( _state==PROGRAMMING) {
+						printf("still busy...\n");
+					} else {
+						printf(" programming to %s.\n",_stm32.path());
+						Bytes binary(512000);
+						if ( loadBinFile(binary,"/home/lieven/workspace/stm32prog/Blink.bin") ) {
+							batchProgram(binary);
+							_state = PROGRAMMING;
+						}
 					}
 				} else if(ch == 'b') {
 					_state = IDLE;
@@ -151,8 +174,15 @@ Receive& Programmer::createReceive() {
 	.match(MsgClass::AnyClass,
 	[this](Msg& msg) {
 		if(_state == PROGRAMMING) {
+			INFO(" programming <<< %s",msg.toString().c_str());
 			uint32_t rc = programming(msg);
-			if(rc == PT_EXITED) _state = TERMINAL;
+			if(rc == PT_EXITED) {
+				printf("failed.\n");
+				_state=TERMINAL;
+			} else if ( rc ==PT_ENDED) {
+				printf("running.");
+				_state=TERMINAL;
+			}
 		} else if(_state == TERMINAL) {
 			// TODO display data from serial
 		}
@@ -185,10 +215,12 @@ Receive& Programmer::createReceive() {
 		.match(LABEL("resetSystemReply"), [this](Msg& msg) {})*/
 
 	.match(MsgClass("pingTimer"), [this](Msg& msg) {
+		if ( !_pingReplied ) printf(" no stm32programmer ping reply\n");
 		_stm32.tell(Msg("ping").id(_idCounter++),self());
+		_pingReplied=false;
 	})
 	.match(MsgClass("pingReply"), [this](Msg& msg) {
-		INFO(" PING OK ");
+		_pingReplied=true;
 	})
 
 	.match(MsgClass::Properties(), [this](Msg& msg) {sender().tell(replyBuilder(msg)("state",_state==PROGRAMMING ? "programming" : "terminal"),self());})

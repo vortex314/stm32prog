@@ -19,7 +19,6 @@ class MsgBatch;
 class Programmer : public Actor {
 		ActorRef& _keyboard;
 		ActorRef& _bridge;
-		ActorRef& _publisher;
 		RemoteActorRef _stm32;
 		Label _timer1;
 		Receive* _stateSelect;
@@ -30,8 +29,11 @@ class Programmer : public Actor {
 			IDLE,PROGRAMMING,TERMINAL
 		} _state;
 		uint32_t _idCounter;
+		bool _pingReplied;
+		uint32_t _idxBatchSend;
+		uint32_t _idxBatchReply;
 	public:
-		Programmer(ActorRef&,ActorRef&,ActorRef& );
+		Programmer(ActorRef&,ActorRef&);
 		virtual ~Programmer() ;
 		void preStart();
 		Receive& createReceive();

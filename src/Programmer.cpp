@@ -22,7 +22,8 @@ Programmer::Programmer(ActorRef& keyboard, ActorRef& bridge)
 	: _keyboard(keyboard)
 	, _bridge(bridge)
 	, _stm32("ESP32-12857/programmer", bridge)
-	, _batch(*new MsgBatch()) {
+	, _batch(*new MsgBatch())
+	,_binary(1024000) {
 	_state = IDLE;
 	_idCounter=0;
 	_pingReplied=true;
@@ -98,8 +99,11 @@ uint32_t Programmer::programming(Msg& msg) {
 
 	PT_BEGIN(&pt);
 
+	printf("programming STM32 : %d bytes\n",_binary.length());
 	for( _idxBatchSend = 0; _idxBatchSend < window; _idxBatchSend++) { //send first window
-		_stm32.tell(_batch.at(_idxBatchSend),self());
+		Msg& m=_batch.at(_idxBatchSend);
+		_stm32.tell(m,self());
+		INFO(" [%d] %s ",m.id(),Label::label(m.cls()));
 	}
 
 	while(true) {
@@ -114,15 +118,18 @@ uint32_t Programmer::programming(Msg& msg) {
 			ERROR(" programming stopped , timeout encountered.");
 			PT_EXIT(&pt);
 		} else if (msg.cls() == replyCls(_batch.at(_idxBatchReply).cls())) {
-			int erc;
-			if(msg.get("erc", erc) == 0) {
-				printf(" %d/%d %s = %d \n",_idxBatchReply,_batch.size()-1,Label::label(_batch.at(_idxBatchReply).cls()),erc);
+			int erc,id;
+			if((msg.get("erc", erc) == 0) && ( msg.get(UD_ID,id)==0)) {
+				printf(" %d/%d [%d] %s = %d \n",_idxBatchReply,_batch.size()-1,id,Label::label(_batch.at(_idxBatchReply).cls()),erc);
+				INFO(" %d/%d [%d] %s = %d \n",_idxBatchReply,_batch.size()-1,id,Label::label(_batch.at(_idxBatchReply).cls()),erc);
 				_idxBatchReply++;
 
 				if (erc == E_OK) {
 					if(_idxBatchReply == _batch.size()) break;
 					if(_idxBatchSend  < _batch.size()) {
-						_stm32.tell(_batch.at(_idxBatchSend),self());
+						Msg& m=_batch.at(_idxBatchSend);
+						_stm32.tell(m,self());
+						INFO(" [%d] %s ",m.id(),Label::label(m.cls()));
 						_idxBatchSend++;
 					}
 				} else {
@@ -139,7 +146,7 @@ uint32_t Programmer::programming(Msg& msg) {
 			PT_EXIT(&pt);
 		}
 	}
-
+	printf(" programming finished.\n");
 	PT_END(&pt);
 }
 
@@ -156,9 +163,8 @@ Receive& Programmer::createReceive() {
 						printf("still busy...\n");
 					} else {
 						printf(" programming to %s.\n",_stm32.path());
-						Bytes binary(512000);
-						if ( loadBinFile(binary,"/home/lieven/workspace/stm32prog/Blink.bin") ) {
-							batchProgram(binary);
+						if ( loadBinFile(_binary,"/tmp/arduino_build_9187/Blink.ino.bin") ) {
+							batchProgram(_binary);
 							_state = PROGRAMMING;
 						}
 					}
@@ -174,13 +180,12 @@ Receive& Programmer::createReceive() {
 	.match(MsgClass::AnyClass,
 	[this](Msg& msg) {
 		if(_state == PROGRAMMING) {
-			INFO(" programming <<< %s",msg.toString().c_str());
 			uint32_t rc = programming(msg);
 			if(rc == PT_EXITED) {
 				printf("failed.\n");
 				_state=TERMINAL;
 			} else if ( rc ==PT_ENDED) {
-				printf("running.");
+				printf("running.\n");
 				_state=TERMINAL;
 			}
 		} else if(_state == TERMINAL) {
@@ -215,8 +220,12 @@ Receive& Programmer::createReceive() {
 		.match(LABEL("resetSystemReply"), [this](Msg& msg) {})*/
 
 	.match(MsgClass("pingTimer"), [this](Msg& msg) {
-		if ( !_pingReplied ) printf(" no stm32programmer ping reply\n");
+		if ( _prevPingReplied !=  _pingReplied  ) {
+			if ( _pingReplied ) printf(" stm32programmer ping reply\n");
+			else printf(" Fail stm32programmer ping reply\n");
+		}
 		_stm32.tell(Msg("ping").id(_idCounter++),self());
+		_prevPingReplied=_pingReplied;
 		_pingReplied=false;
 	})
 	.match(MsgClass("pingReply"), [this](Msg& msg) {

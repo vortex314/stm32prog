@@ -30,8 +30,10 @@ class Programmer : public Actor {
 		} _state;
 		uint32_t _idCounter;
 		bool _pingReplied;
+		bool _prevPingReplied;
 		uint32_t _idxBatchSend;
 		uint32_t _idxBatchReply;
+		Bytes _binary;
 	public:
 		Programmer(ActorRef&,ActorRef&);
 		virtual ~Programmer() ;

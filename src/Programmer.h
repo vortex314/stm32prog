@@ -15,6 +15,7 @@
 #include <vector>
 #include <Base64.h>
 #include "Keyboard.h"
+#include <pt.h>
 class MsgBatch;
 class Programmer : public Actor {
 		ActorRef& _keyboard;
@@ -34,6 +35,7 @@ class Programmer : public Actor {
 		uint32_t _idxBatchSend;
 		uint32_t _idxBatchReply;
 		Bytes _binary;
+		struct pt _pt;
 	public:
 		Programmer(ActorRef&,ActorRef&);
 		virtual ~Programmer() ;
@@ -41,7 +43,7 @@ class Programmer : public Actor {
 		Receive& createReceive();
 
 		void batchProgram(Bytes& binImage);
-		uint32_t  programming(Msg& msg) ;
+		uint32_t  programming(struct pt* pt,Msg& msg) ;
 		bool loadBinFile(Bytes& bytes,const char* binFile);
 };
 

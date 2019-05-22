@@ -93,13 +93,12 @@ void Programmer::batchProgram(Bytes& binImage) {
 	_idxBatchReply=0;
 }
 
-uint32_t Programmer::programming(Msg& msg) {
-	static struct pt pt;
+uint32_t Programmer::programming(struct pt* pt,Msg& msg) {
 	static uint32_t window = 5;
 
-	PT_BEGIN(&pt);
+	PT_BEGIN(pt);
 
-	printf("programming STM32 : %d bytes\n",_binary.length());
+	printf("> programming STM32 : %d bytes",_binary.length());
 	for( _idxBatchSend = 0; _idxBatchSend < window; _idxBatchSend++) { //send first window
 		Msg& m=_batch.at(_idxBatchSend);
 		_stm32.tell(m,self());
@@ -108,7 +107,7 @@ uint32_t Programmer::programming(Msg& msg) {
 
 	while(true) {
 		_timer1 = timers().startSingleTimer("timeout", Msg("timeout"), 3000);
-		PT_YIELD_UNTIL(&pt,
+		PT_YIELD_UNTIL(pt,
 		               msg.cls() == MsgClass("timeout").id() ||
 		               !( msg.cls()==MsgClass("pingReply").id() || msg.cls()==MsgClass("pingTimer").id()) );
 		timers().cancel(_timer1);
@@ -116,7 +115,7 @@ uint32_t Programmer::programming(Msg& msg) {
 		if(msg.cls() == MsgClass("timeout").id()) {
 
 			ERROR(" programming stopped , timeout encountered.");
-			PT_EXIT(&pt);
+			PT_EXIT(pt);
 		} else if (msg.cls() == replyCls(_batch.at(_idxBatchReply).cls())) {
 			int erc,id;
 			if((msg.get("erc", erc) == 0) && ( msg.get(UD_ID,id)==0)) {
@@ -138,16 +137,16 @@ uint32_t Programmer::programming(Msg& msg) {
 			} else {
 				ERROR(" programming stopped , cannot retrieve erc . %s ",msg.toString().c_str());
 				ERROR("%s",((Xdr)msg).toString().c_str());
-				PT_EXIT(&pt);
+				PT_EXIT(pt);
 			}
 		} else {
 
 			ERROR(" unexepected message %s , expected %s ",msg.toString().c_str(),Label::label(replyCls(_batch.at(_idxBatchReply).cls())));
-			PT_EXIT(&pt);
+			PT_EXIT(pt);
 		}
 	}
 	printf(" programming finished.\n");
-	PT_END(&pt);
+	PT_END(pt);
 }
 
 Receive& Programmer::createReceive() {
@@ -160,18 +159,23 @@ Receive& Programmer::createReceive() {
 			for(char ch : keys) {
 				if(ch == 'p') {
 					if ( _state==PROGRAMMING) {
-						printf("still busy...\n");
+						printf("> still busy...\n");
 					} else {
-						printf(" programming to %s.\n",_stm32.path());
-						if ( loadBinFile(_binary,"/tmp/arduino_build_9187/Blink.ino.bin") ) {
+						printf("> programming to %s.\n",_stm32.path());
+//						if ( loadBinFile(_binary,"/home/lieven/Documents/PlatformIO/Projects/MapleUsb/.pio/build/bluepill_f103c8/firmware.bin") ) {
+//						if ( loadBinFile(_binary,"/home/lieven/Documents/PlatformIO/Projects/MapleUsb/.pio/build/genericSTM32F103CB/firmware.bin") ) {
+						if ( loadBinFile(_binary,"/home/lieven/workspace/stm32f103c8t6/rtos/usbcdcdemo/main.bin")) {
 							batchProgram(_binary);
 							_state = PROGRAMMING;
+							PT_INIT(&_pt); // reset state machine
 						}
 					}
-				} else if(ch == 'b') {
-					_state = IDLE;
-				} else if(ch == 't') {
-					_state = TERMINAL;
+				} else if(ch == 'r') {
+					_stm32.tell(Msg("resetFlash")("xx",1),self());
+					printf("> reset to flash \n");
+				} else if(ch == 's') {
+					_stm32.tell(Msg("resetSystem")("xx",1),self());
+					printf("> reset to system \n");
 				}
 			}
 		}
@@ -180,7 +184,7 @@ Receive& Programmer::createReceive() {
 	.match(MsgClass::AnyClass,
 	[this](Msg& msg) {
 		if(_state == PROGRAMMING) {
-			uint32_t rc = programming(msg);
+			uint32_t rc = programming(&_pt,msg); // invoke state machine
 			if(rc == PT_EXITED) {
 				printf("failed.\n");
 				_state=TERMINAL;
@@ -215,21 +219,30 @@ Receive& Programmer::createReceive() {
 
 		.match(LABEL("eraseAllReply"), [this](Msg& msg) {})
 
-		.match(LABEL("resetFlashReply"), [this](Msg& msg) {})
+
 
 		.match(LABEL("resetSystemReply"), [this](Msg& msg) {})*/
 
 	.match(MsgClass("pingTimer"), [this](Msg& msg) {
 		if ( _prevPingReplied !=  _pingReplied  ) {
-			if ( _pingReplied ) printf(" stm32programmer ping reply\n");
-			else printf(" Fail stm32programmer ping reply\n");
+			if ( _pingReplied ) printf("===================== ONLINE =======================\n");
+			else printf("===================== OFFLINE ======================\n");
 		}
 		_stm32.tell(Msg("ping").id(_idCounter++),self());
 		_prevPingReplied=_pingReplied;
 		_pingReplied=false;
 	})
+
 	.match(MsgClass("pingReply"), [this](Msg& msg) {
 		_pingReplied=true;
+	})
+
+	.match(LABEL("resetFlashReply"), [this](Msg& msg) {
+		printf(" reset flash done.\n");
+	})
+
+	.match(LABEL("resetSystemReply"), [this](Msg& msg) {
+		printf(" reset system done.\n");
 	})
 
 	.match(MsgClass::Properties(), [this](Msg& msg) {sender().tell(replyBuilder(msg)("state",_state==PROGRAMMING ? "programming" : "terminal"),self());})

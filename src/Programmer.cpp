@@ -24,6 +24,10 @@ Programmer::Programmer(ActorRef& keyboard, ActorRef& bridge)
 	, _stm32("ESP32-12857/programmer", bridge)
 	, _batch(*new MsgBatch())
 	,_binary(1024000) {
+	config.setNameSpace("programmer");
+	config.get("binFile",_binFile,"./main.bin");
+	config.get("programmingBaudrate",_programmingBaudrate,115200);
+	config.get("terminalBaudrate",_terminalBaudrate,115200);
 	_state = IDLE;
 	_idCounter=0;
 	_pingReplied=true;
@@ -67,7 +71,7 @@ bool Programmer::loadBinFile(Bytes& bytes,const char* binFile) {
 void Programmer::batchProgram(Bytes& binImage) {
 	std::vector<Msg> msgs;
 	_batch.clear();
-	_batch.add(Msg("resetSystem").id(_idCounter++));
+	_batch.add(Msg("resetSystem")("baudrate",_programmingBaudrate).id(_idCounter++));
 	_batch.add(Msg("eraseAll").id(_idCounter++));
 	// TODO add writeMemory
 	uint32_t imageSize=binImage.length();
@@ -88,7 +92,7 @@ void Programmer::batchProgram(Bytes& binImage) {
 		_batch.add(Msg("writeMemory")("addressHex", addressHex)("data", sectorBase64).id(_idCounter++));
 	}
 	_batch.add(Msg("readMemory")("addressHex", "8000000").id(_idCounter++));
-	_batch.add(Msg("resetFlash").id(_idCounter++));
+	_batch.add(Msg("resetFlash")("baudrate",_terminalBaudrate).id(_idCounter++));
 	_idxBatchSend=0;
 	_idxBatchReply=0;
 }
@@ -98,7 +102,7 @@ uint32_t Programmer::programming(struct pt* pt,Msg& msg) {
 
 	PT_BEGIN(pt);
 
-	printf("> programming STM32 : %d bytes",_binary.length());
+	printf("> programming STM32 : %d bytes from file : %s \n",_binary.length(),_binFile.c_str());
 	for( _idxBatchSend = 0; _idxBatchSend < window; _idxBatchSend++) { //send first window
 		Msg& m=_batch.at(_idxBatchSend);
 		_stm32.tell(m,self());
@@ -117,13 +121,15 @@ uint32_t Programmer::programming(struct pt* pt,Msg& msg) {
 			ERROR(" programming stopped , timeout encountered.");
 			PT_EXIT(pt);
 		} else if (msg.cls() == replyCls(_batch.at(_idxBatchReply).cls())) {
-			int erc,id;
+			int erc;
+			uid_type id;
+			Msg& m = _batch.at(_idxBatchReply);
 			if((msg.get("erc", erc) == 0) && ( msg.get(UD_ID,id)==0)) {
 				printf(" %d/%d [%d] %s = %d \n",_idxBatchReply,_batch.size()-1,id,Label::label(_batch.at(_idxBatchReply).cls()),erc);
 				INFO(" %d/%d [%d] %s = %d \n",_idxBatchReply,_batch.size()-1,id,Label::label(_batch.at(_idxBatchReply).cls()),erc);
 				_idxBatchReply++;
 
-				if (erc == E_OK) {
+				if (erc == E_OK && m.id()==id ) {
 					if(_idxBatchReply == _batch.size()) break;
 					if(_idxBatchSend  < _batch.size()) {
 						Msg& m=_batch.at(_idxBatchSend);
@@ -132,7 +138,7 @@ uint32_t Programmer::programming(struct pt* pt,Msg& msg) {
 						_idxBatchSend++;
 					}
 				} else {
-					ERROR("stm32programmer returned erc : %d ",erc);
+					ERROR("stm32programmer returned erc : %d or different id : %d vs %d ",erc,id,m.id());
 				}
 			} else {
 				ERROR(" programming stopped , cannot retrieve erc . %s ",msg.toString().c_str());
@@ -142,7 +148,7 @@ uint32_t Programmer::programming(struct pt* pt,Msg& msg) {
 		} else {
 
 			ERROR(" unexepected message %s , expected %s ",msg.toString().c_str(),Label::label(replyCls(_batch.at(_idxBatchReply).cls())));
-			PT_EXIT(pt);
+//			PT_EXIT(pt);
 		}
 	}
 	printf(" programming finished.\n");
@@ -164,7 +170,8 @@ Receive& Programmer::createReceive() {
 						printf("> programming to %s.\n",_stm32.path());
 //						if ( loadBinFile(_binary,"/home/lieven/Documents/PlatformIO/Projects/MapleUsb/.pio/build/bluepill_f103c8/firmware.bin") ) {
 //						if ( loadBinFile(_binary,"/home/lieven/Documents/PlatformIO/Projects/MapleUsb/.pio/build/genericSTM32F103CB/firmware.bin") ) {
-						if ( loadBinFile(_binary,"/home/lieven/workspace/stm32f103c8t6/rtos/usbcdcdemo/main.bin")) {
+//						if ( loadBinFile(_binary,"/home/lieven/workspace/stm32f103c8t6/rtos/usbcdcdemo/main.bin")) {
+						if ( loadBinFile(_binary,_binFile.c_str()) ) {
 							batchProgram(_binary);
 							_state = PROGRAMMING;
 							PT_INIT(&_pt); // reset state machine

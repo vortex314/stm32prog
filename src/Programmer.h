@@ -16,10 +16,14 @@
 #include <Base64.h>
 #include "Keyboard.h"
 #include <pt.h>
+#include <Config.h>
 class MsgBatch;
 class Programmer : public Actor {
 		ActorRef& _keyboard;
 		ActorRef& _bridge;
+		std::string _binFile;
+		uint32_t _programmingBaudrate;
+		uint32_t _terminalBaudrate;
 		RemoteActorRef _stm32;
 		Label _timer1;
 		Receive* _stateSelect;

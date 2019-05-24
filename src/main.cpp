@@ -40,50 +40,75 @@ void logFunction(char* str,uint32_t length) {
 
 
 int main(int argc, char **argv) {
-	INFO(" MAIN task started");
-
 	Sys::init();
-	INFO("version : " __DATE__ " " __TIME__ "\n");
+	INFO("version : " __DATE__ " " __TIME__ );
+	INFO(" switching output to logfile. ");
+	logger.setOutput(logFunction);
 
-//TODO	config.loadFile("stm32prog.json");
+	config.loadFile("stm32prog.json");
 	logger.setLogLevel('I');
 	logger.setOutput(logFunction);
 	overrideConfig(config,argc,argv);
-	std::string url= config.root()["mqtt"]["url"] | "tcp://limero.ddns.net:1883";
-	config.save();
-
-	INFO(" starting microAkka test ");
+	config.saveFile("stm32prog.json");
 	static MessageDispatcher defaultDispatcher(5, 10240, tskIDLE_PRIORITY + 1);
 	static ActorSystem actorSystem(Sys::hostname(), defaultDispatcher);
 
+	std::string url; //= config.root()["mqtt"]["url"] | "tcp://limero.ddns.net:1883";
+	config.setNameSpace("mqtt");
+	config.get("url",url,"tcp://limero.ddns.net:1883");
 	ActorRef& mqtt =
 	    actorSystem.actorOf<Mqtt>("mqtt", url.c_str());
 	actorSystem.actorOf<System>("system", mqtt);
 	ActorRef& bridge = actorSystem.actorOf<Bridge>("bridge", mqtt);
-//	ActorRef& publisher = actorSystem.actorOf<Publisher>("publisher", mqtt);
+	ActorRef& publisher = actorSystem.actorOf<Publisher>("publisher", mqtt);
 	ActorRef& keyboard = actorSystem.actorOf<Keyboard>("keyboard");
 	actorSystem.actorOf<Programmer>("programmer", keyboard,bridge);
+	config.saveFile("stm32prog.json");
+
 	sleep(10000000);
 
 }
-
-
 void overrideConfig(Config& config,int argc, char **argv) {
 	int  opt;
 
-	while ((opt = getopt(argc, argv, "f:m:")) != -1) {
+	while ((opt = getopt(argc, argv, "f:m:p:t:b:")) != -1) {
 		switch (opt) {
-			case 'm':
-				config.setNameSpace("mqtt");
-				config.set("host",optarg);
-				break;
-			case 'f':
-//TODO				config.loadFile(optarg);
-				break;
-			default: /* '?' */
-				fprintf(stderr, "Usage: %s [-f configFile] [-m mqttHost]\n",
-				        argv[0]);
-				exit(EXIT_FAILURE);
+			case 'm': {
+					config.setNameSpace("mqtt");
+					config.set("url",optarg);
+					break;
+				}
+			case 'c': {
+					config.loadFile(optarg);
+					break;
+				}
+			case 'p': {
+					uint32_t br=115200;
+					sscanf(optarg,"%d",&br);
+					config.setNameSpace("programmer");
+					config.set("programmingBaudrate",br);
+					break;
+				}
+			case 't': {
+					uint32_t br=115200;
+					sscanf(optarg,"%d",&br);
+					config.setNameSpace("programmer");
+					config.set("terminalBaudrate",br);
+					break;
+				}
+			case 'b': {
+					config.setNameSpace("programmer");
+					config.set("binFile",optarg);
+					break;
+				}
+			default: {/* '?' */
+					fprintf(stderr, "Usage: %s [-c configFile] [-b binFile] [-m mqttUrl] [-p programmingBaudrate] [-t terminalBaudrate]\n",
+					        argv[0]);
+					fprintf(stderr," binFile : ./main.bin \n");
+					fprintf(stderr," mqttUrl : tcp://iot;exclipse.org:1883\n");
+					sleep(3);
+					exit(EXIT_FAILURE);
+				}
 		}
 	}
 }

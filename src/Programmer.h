@@ -25,6 +25,7 @@ class Programmer : public Actor {
 		uint32_t _programmingBaudrate;
 		uint32_t _terminalBaudrate;
 		RemoteActorRef _stm32;
+		RemoteActorRef _globalServices;
 		Label _timer1;
 		Receive* _stateSelect;
 		Receive* _stateTerminal;

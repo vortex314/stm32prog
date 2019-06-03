@@ -23,6 +23,8 @@
     <File Name="src/Programmer.h"/>
     <File Name="src/Programmer.cpp"/>
   </VirtualDirectory>
+  <Dependencies Name="Debug"/>
+  <Dependencies Name="Release"/>
   <Settings Type="Executable">
     <GlobalSettings>
       <Compiler Options="" C_Options="" Assembler="">
@@ -41,11 +43,11 @@
         <IncludePath Value="../ArduinoJson"/>
         <IncludePath Value="../paho.mqtt.c/src"/>
       </Compiler>
-      <Linker Options="-pthread;-lrt" Required="yes">
+      <Linker Options="-pthread;-lrt;-l:libpaho-mqtt3c.a" Required="yes">
         <LibraryPath Value="../Common/Debug"/>
-        <LibraryPath Value="../paho.mqtt.c/src"/>
+        <LibraryPath Value="../paho.mqtt.c/build/output"/>
         <Library Value="Common"/>
-        <Library Value="libpaho-mqtt3a-static"/>
+        <Library Value="pthread"/>
       </Linker>
       <ResourceCompiler Options="" Required="no"/>
       <General OutputFile="$(IntermediateDirectory)/$(ProjectName)" IntermediateDirectory="./Debug" Command="./$(ProjectName)" CommandArguments="-b /home/lieven/Documents/PlatformIO/Projects/MapleUsb/.pio/build/maple/firmware.bin  -p 1000000 -t 115200 " UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="$(IntermediateDirectory)" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
@@ -122,6 +124,4 @@
       </Completion>
     </Configuration>
   </Settings>
-  <Dependencies Name="Debug"/>
-  <Dependencies Name="Release"/>
 </CodeLite_Project>

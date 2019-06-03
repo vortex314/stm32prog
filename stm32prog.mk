@@ -35,13 +35,13 @@ PreprocessOnlySwitch   :=-E
 ObjectsFileList        :="stm32prog.txt"
 PCHCompileFlags        :=
 MakeDirCommand         :=mkdir -p
-LinkOptions            :=  -pthread -lrt
+LinkOptions            :=  -pthread -lrt -l:libpaho-mqtt3c.a
 IncludePath            :=  $(IncludeSwitch). $(IncludeSwitch)./src $(IncludeSwitch)../microAkka/src $(IncludeSwitch)../Common $(IncludeSwitch)../ArduinoJson $(IncludeSwitch)../paho.mqtt.c/src 
 IncludePCH             := 
 RcIncludePath          := 
-Libs                   := $(LibrarySwitch)Common $(LibrarySwitch)paho-mqtt3a-static 
-ArLibs                 :=  "Common" "libpaho-mqtt3a-static" 
-LibPath                := $(LibraryPathSwitch). $(LibraryPathSwitch)../Common/Debug $(LibraryPathSwitch)../paho.mqtt.c/src 
+Libs                   := $(LibrarySwitch)Common $(LibrarySwitch)pthread 
+ArLibs                 :=  "Common" "pthread" 
+LibPath                := $(LibraryPathSwitch). $(LibraryPathSwitch)../Common/Debug $(LibraryPathSwitch)../paho.mqtt.c/build/output 
 
 ##
 ## Common variables

@@ -10,7 +10,7 @@
 #include <NeuralPid.h>
 #include <Sender.h>
 #include <System.h>
-#include <Publisher.h>
+#include <Bridge.h>
 #include "Programmer.h"
 
 #include <Akka.cpp>
@@ -20,7 +20,6 @@
 #include <Mqtt.cpp>
 #include <Sender.cpp>
 #include <System.cpp>
-#include <Publisher.cpp>
 #include <ConfigActor.cpp>
 #include <Keyboard.h>
 
@@ -60,12 +59,11 @@ int main(int argc, char **argv) {
 	    actorSystem.actorOf<Mqtt>("mqtt", url.c_str());
 	actorSystem.actorOf<System>("system", mqtt);
 	ActorRef& bridge = actorSystem.actorOf<Bridge>("bridge", mqtt);
-	ActorRef& publisher = actorSystem.actorOf<Publisher>("publisher", mqtt);
 	ActorRef& keyboard = actorSystem.actorOf<Keyboard>("keyboard");
 	actorSystem.actorOf<Programmer>("programmer", keyboard,bridge);
 	config.saveFile("stm32prog.json");
 
-	sleep(10000000);
+	sleep(10000000); // needed to avoid lost ACtorRef ?
 
 }
 void overrideConfig(Config& config,int argc, char **argv) {

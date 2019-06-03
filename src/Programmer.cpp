@@ -42,7 +42,7 @@ void Programmer::preStart() {
 	_stateSelect = &receiveBuilder().match(MsgClass("check"), [this](Msg&) {}).build();
 
 	eb.subscribe(self(), MessageClassifier(_keyboard,Keyboard::keyPressed));
-	eb.subscribe(self(), MessageClassifier(_stm32,MsgClass("uart"))); //ActorRef needs to be on heap
+	eb.subscribe(self(), MessageClassifier(_stm32,MsgClass("uart"))); 								//ActorRef needs to be on heap and continue to exist after this call
 	eb.subscribe(self(), MessageClassifier(_globalServices, MsgClass("stm32programmer")));
 
 }
@@ -103,7 +103,8 @@ Receive& Programmer::createReceive() {
 	[this](Msg& msg) {
 		std::string str;
 		if (msg.get("data",str)==0) {
-			printf("%s",str.c_str());
+			fprintf(stdout,"%s",str.c_str());
+			fflush(stdout);
 		}
 	})
 

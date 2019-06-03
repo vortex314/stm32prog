@@ -10,7 +10,7 @@
 
 
 #include <Akka.h>
-#include <Publisher.h>
+#include <Bridge.h>
 #include <Mqtt.h>
 #include <vector>
 #include <Base64.h>
